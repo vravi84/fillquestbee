@@ -1,0 +1,55 @@
+# Firebase App Hosting Configuration — FillQuestBee (https://fillquestbee.com)
+# https://firebase.google.com/docs/app-hosting/configure
+
+# Environment Variables and Secret Manager bindings
+env:
+  # Server-only secrets stored in Google Cloud Secret Manager
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+  - variable: FIREBASE_PROJECT_ID
+    secret: FIREBASE_PROJECT_ID
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+  - variable: GEMINI_MODEL
+    value: "gemini-3.5-flash"
+    availability:
+      - RUNTIME
+  - variable: INITIAL_ADMIN_EMAIL
+    value: "sciencevid4u@gmail.com"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Client-safe configuration environment variables
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyBkkpeLA4sc5rH5Zx7R5ib6PyNcBmYOJAM"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "school-projects-23008.firebaseapp.com"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "school-projects-23008"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "school-projects-23008.firebasestorage.app"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "413854187611"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:413854187611:web:a0a54d1b1616e58661ff7e"
+    availability:
+      - BUILD
+      - RUNTIME

@@ -26,14 +26,15 @@ export async function verifyTeacherApproval(req: NextRequest): Promise<AuthVerif
     token = authHeader.substring(7);
   }
 
-  let targetUid = userId || (token && token !== 'teacher_demo_token' ? token : '');
+  let targetUid = '';
 
-  // Handle local development demo accounts
+  // Handle local development demo accounts only in development mode
   if (
-    userId === 'teacher_demo_1' ||
-    userId === 'admin_demo_1' ||
-    token === 'teacher_demo_token' ||
-    token === 'admin_demo_token'
+    process.env.NODE_ENV === 'development' &&
+    (userId === 'teacher_demo_1' ||
+      userId === 'admin_demo_1' ||
+      token === 'teacher_demo_token' ||
+      token === 'admin_demo_token')
   ) {
     return {
       authorized: true,
@@ -44,19 +45,34 @@ export async function verifyTeacherApproval(req: NextRequest): Promise<AuthVerif
     };
   }
 
-  // Verify ID token via Firebase Admin SDK if token is provided & Admin SDK is available
-  if (isAdminSdkInitialized && adminAuth && token) {
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(token);
-      targetUid = decodedToken.uid;
-    } catch (err) {
-      console.warn('ID token verification failed in verifyTeacherApproval:', err);
-      return {
-        authorized: false,
-        error: 'Unauthorized: Invalid or expired authentication token.',
-        statusCode: 401,
-      };
-    }
+  // Require Authorization Bearer token for non-demo requests
+  if (!token) {
+    return {
+      authorized: false,
+      error: 'Unauthorized: Authentication token required to access AI services.',
+      statusCode: 401,
+    };
+  }
+
+  // Verify ID token via Firebase Admin SDK; fail closed if Admin SDK is unavailable
+  if (!isAdminSdkInitialized || !adminAuth) {
+    return {
+      authorized: false,
+      error: 'Server Error: Firebase Admin SDK is not configured on the server.',
+      statusCode: 500,
+    };
+  }
+
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    targetUid = decodedToken.uid;
+  } catch (err) {
+    console.warn('ID token verification failed in verifyTeacherApproval:', err);
+    return {
+      authorized: false,
+      error: 'Unauthorized: Invalid or expired authentication token.',
+      statusCode: 401,
+    };
   }
 
   if (!targetUid) {
@@ -190,12 +206,10 @@ export async function verifyTeacherApproval(req: NextRequest): Promise<AuthVerif
     }
   }
 
-  // Fallback for demo environments
+  // Fail closed when user profile status cannot be verified
   return {
-    authorized: true,
-    userId: targetUid,
-    userName: 'Teacher',
-    role: 'teacher',
-    status: 'approved',
+    authorized: false,
+    error: 'Service Unavailable: Unable to verify teacher approval status.',
+    statusCode: 503,
   };
 }

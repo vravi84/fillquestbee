@@ -26,7 +26,7 @@ export default function Step3ExtractSentences({
   onNext,
   onBack,
 }: Step3Props) {
-  const { user } = useAuth();
+  const { user, getIdToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('🔍 Reading your lesson...');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -34,6 +34,11 @@ export default function Step3ExtractSentences({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchSentences = async () => {
+    if (!user) {
+      setErrorMsg('Please log in again to continue.');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
     setLoadingStage('🔍 Reading your lesson...');
@@ -42,11 +47,23 @@ export default function Step3ExtractSentences({
     const stageTimer2 = setTimeout(() => setLoadingStage('✨ Creating your questions...'), 2400);
 
     try {
+      let token = '';
+      try {
+        token = (await getIdToken()) || '';
+      } catch (tokenErr) {
+        console.warn('Failed to retrieve ID token:', tokenErr);
+        throw new Error('Your login session has expired. Please sign in again.');
+      }
+
+      if (!token) {
+        throw new Error('Your login session has expired. Please sign in again.');
+      }
+
       const res = await fetch('/api/ai/extract-content', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.uid || 'teacher_demo_1',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           text: contentData.text,
@@ -58,6 +75,9 @@ export default function Step3ExtractSentences({
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Your login session is invalid or expired. Please sign in again.');
+        }
         throw new Error(data.error || 'Failed to extract sentences.');
       }
 
@@ -67,7 +87,7 @@ export default function Step3ExtractSentences({
         throw new Error('No suitable sentences were extracted. Please provide clearer content.');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('Error extracting sentences:', err);
       setErrorMsg(err.message || 'Error occurred while extracting sentences.');
     } finally {
       clearTimeout(stageTimer1);

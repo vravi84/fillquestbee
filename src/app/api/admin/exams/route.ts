@@ -14,8 +14,26 @@ export async function GET(req: NextRequest) {
     }
 
     if (isAdminSdkInitialized && adminDb) {
-      const snapshot = await adminDb.collection('exams').get();
-      const exams = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      const dbRef = adminDb;
+      const snapshot = await dbRef.collection('exams').get();
+      const exams = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const examData = docSnap.data();
+          const examId = docSnap.id;
+          let attemptCount = examData.attemptCount || 0;
+          try {
+            const countSnap = await dbRef
+              .collection('attempts')
+              .where('examId', '==', examId)
+              .count()
+              .get();
+            attemptCount = countSnap.data().count;
+          } catch {
+            // Keep existing attemptCount fallback
+          }
+          return { id: examId, ...examData, attemptCount };
+        })
+      );
       exams.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       return NextResponse.json({ exams });
     }

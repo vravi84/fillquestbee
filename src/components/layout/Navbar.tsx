@@ -86,12 +86,14 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-2 sm:gap-3">
-                <button
-                  onClick={loginAsDemoTeacher}
-                  className="text-xs sm:text-sm 2xl:text-base font-semibold px-3.5 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors"
-                >
-                  ⚡ Try Quick Demo
-                </button>
+                {process.env.NODE_ENV === 'development' && (
+                  <button
+                    onClick={loginAsDemoTeacher}
+                    className="text-xs sm:text-sm 2xl:text-base font-semibold px-3.5 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors"
+                  >
+                    ⚡ Try Quick Demo
+                  </button>
+                )}
                 <Link
                   href="/teacher/login"
                   className="text-sm 2xl:text-base font-semibold px-4 py-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors"
@@ -165,15 +167,17 @@ export default function Navbar() {
               </>
             ) : (
               <div className="space-y-2 pt-1">
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    loginAsDemoTeacher();
-                  }}
-                  className="w-full py-3 text-xs font-bold text-amber-800 bg-amber-50 rounded-xl border border-amber-200"
-                >
-                  ⚡ Try Quick Demo Mode
-                </button>
+                {process.env.NODE_ENV === 'development' && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      loginAsDemoTeacher();
+                    }}
+                    className="w-full py-3 text-xs font-bold text-amber-800 bg-amber-50 rounded-xl border border-amber-200"
+                  >
+                    ⚡ Try Quick Demo Mode
+                  </button>
+                )}
                 <Link
                   href="/teacher/login"
                   onClick={() => setMobileMenuOpen(false)}

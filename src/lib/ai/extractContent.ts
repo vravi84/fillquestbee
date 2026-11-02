@@ -59,6 +59,11 @@ export async function extractSentencesFromContent(
     return fallbackSentenceExtractor(text || '', questionCount);
   }
 
+  const lessonContentBlock =
+    text && text.trim().length > 0
+      ? `\n\nLesson Content:\n"""\n${text.trim()}\n"""`
+      : '';
+
   const prompt = `
 You are an expert AI school teacher assistant. Analyze the provided educational lesson content (text/image/document).
 Your task is to extract approximately ${questionCount} (between 10 and 15) high-quality, clear, factual educational sentences suitable for school fill-in-the-blank (CDF) exam questions.
@@ -74,7 +79,7 @@ Rules:
     "The SI unit of force is Newton.",
     "Pressure is defined as force per unit area."
   ]
-}
+}${lessonContentBlock}
 `.trim();
 
   try {

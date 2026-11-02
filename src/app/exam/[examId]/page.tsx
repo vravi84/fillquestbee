@@ -86,11 +86,13 @@ export default function StudentExamPage({ params }: { params: Promise<{ examId: 
     setIsAnswered(true);
     setIsCorrect(correct);
 
-    // Record answer
+    // Record only the first attempt for each question so retries for learning do not overwrite the score
     setUserAnswers((prev) => {
-      const filtered = prev.filter((a) => a.questionId !== currentQ.id);
+      if (prev.some((a) => a.questionId === currentQ.id)) {
+        return prev;
+      }
       return [
-        ...filtered,
+        ...prev,
         {
           questionId: currentQ.id,
           sentenceWithBlank: currentQ.sentenceWithBlank,

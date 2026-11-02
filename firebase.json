@@ -4,9 +4,6 @@
   },
   "apphosting": [
     {
-      "backend": "cdf-app"
-    },
-    {
       "backendId": "cdf-web-app-backend",
       "rootDir": "/",
       "ignore": [

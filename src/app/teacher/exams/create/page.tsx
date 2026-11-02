@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { saveExam } from '@/lib/firebase/services';
 import { Exam, Question, ExtractedSentence } from '@/types';
 import { generateId, generateShareCode } from '@/lib/utils';
@@ -28,6 +29,7 @@ const STEPS = [
 
 export default function CreateExamWizardPage() {
   const { user, loading: authLoading } = useAuth();
+  const { showSuccessToast, showWarningToast } = useToast();
   const router = useRouter();
 
   React.useEffect(() => {
@@ -120,9 +122,10 @@ export default function CreateExamWizardPage() {
       await saveExam(newExam);
       setPublishedExam(newExam);
       setCurrentStep(7);
+      showSuccessToast('Your CDF exam has been published and is ready to share!', 'Exam Published');
     } catch (err) {
       console.error('Failed to publish exam:', err);
-      alert('Error publishing exam. Saved locally.');
+      showWarningToast('Error publishing exam to cloud. Saved locally.', 'Saved Locally');
     }
   };
 

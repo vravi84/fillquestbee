@@ -1,13 +1,9 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { Sparkles, BookOpen, Rocket, CheckCircle2, Award, Users, MoveRight, Layers } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { Sparkles, BookOpen, Rocket } from 'lucide-react';
 
 export default function LandingPage() {
-  const { loginAsDemoTeacher } = useAuth();
-
   return (
     <div className="space-y-16 sm:space-y-24 pb-16">
       {/* Hero Section */}
@@ -30,24 +26,6 @@ export default function LandingPage() {
         <p className="mt-6 text-base sm:text-xl 2xl:text-2xl 3xl:text-3xl text-slate-600 max-w-2xl 2xl:max-w-4xl mx-auto font-medium leading-relaxed">
           Teachers upload textbook pages or notes, Google Gemini AI extracts key concepts, and children learn through fun interactive fill-in-the-blank practice!
         </p>
-
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
-          <button
-            onClick={loginAsDemoTeacher}
-            className="w-full sm:w-auto px-8 2xl:px-12 py-4 2xl:py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-base sm:text-lg 2xl:text-2xl rounded-2xl 2xl:rounded-3xl shadow-lg shadow-indigo-200 hover:shadow-xl transition-all transform active:scale-95 flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-5 h-5 2xl:w-7 2xl:h-7" />
-            <span>Launch Teacher Studio Demo</span>
-          </button>
-
-          <Link
-            href="/exam/FQB-8F4K92"
-            className="w-full sm:w-auto px-8 2xl:px-12 py-4 2xl:py-6 bg-white hover:bg-slate-50 text-slate-800 font-extrabold text-base sm:text-lg 2xl:text-2xl rounded-2xl 2xl:rounded-3xl border-2 border-indigo-100 shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-          >
-            <Rocket className="w-5 h-5 2xl:w-7 2xl:h-7 text-indigo-600" />
-            <span>Try Student Demo Exam 🚀</span>
-          </Link>
-        </div>
       </section>
 
       {/* Feature Highlights Grid */}

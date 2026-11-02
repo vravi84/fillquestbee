@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const pingResponse = await callGeminiApi('Reply with exactly: GEMINI_OK');
+      const pingResponse = await callGeminiApi('Reply with valid JSON: {"status": "GEMINI_OK"}');
       const cleanPing = (pingResponse || '').trim();
       const isOk = cleanPing.toUpperCase().includes('GEMINI_OK');
 

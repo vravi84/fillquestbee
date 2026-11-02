@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, isInitialAdminEmail } from '@/context/AuthContext';
 import { Sparkles, LogIn, Lock, Mail } from 'lucide-react';
 import { ErrorAlert } from '@/components/ui/ErrorAlert';
 import { AppError, parseServerError } from '@/lib/errors';
@@ -24,7 +24,11 @@ export default function TeacherLoginPage() {
 
     const res = await login(email, password);
     if (res.success) {
-      router.push('/teacher/dashboard');
+      if (res.isAdmin || isInitialAdminEmail(email)) {
+        router.push('/admin/dashboard');
+      } else {
+        router.push('/teacher/dashboard');
+      }
     } else if (res.error) {
       setErrorState(res.error);
     }
@@ -32,6 +36,7 @@ export default function TeacherLoginPage() {
   };
 
   const handleDemoClick = () => {
+    if (process.env.NODE_ENV !== 'development') return;
     loginAsDemoTeacher();
     router.push('/teacher/dashboard');
   };
@@ -49,17 +54,19 @@ export default function TeacherLoginPage() {
           </p>
         </div>
 
-        {/* Quick Demo button */}
-        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center">
-          <p className="text-xs font-semibold text-amber-800 mb-2">Want to skip login and test right away?</p>
-          <button
-            type="button"
-            onClick={handleDemoClick}
-            className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-xs transition-all"
-          >
-            ⚡ Login as Demo Teacher
-          </button>
-        </div>
+        {/* Quick Demo button (Development Only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+            <p className="text-xs font-semibold text-amber-800 mb-2">Want to skip login and test right away?</p>
+            <button
+              type="button"
+              onClick={handleDemoClick}
+              className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-xs transition-all"
+            >
+              ⚡ Login as Demo Teacher
+            </button>
+          </div>
+        )}
 
         {errorState && (
           <div className="mb-6">

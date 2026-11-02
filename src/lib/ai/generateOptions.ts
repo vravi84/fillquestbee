@@ -91,6 +91,45 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+export const McqBatchResultSchema = z.object({
+  results: z.array(McqResultSchema),
+});
+
+function ensureFourDistinctOptions(
+  options: string[],
+  correctAnswer: string,
+  sentence: string
+): string[] {
+  const unique: string[] = [correctAnswer];
+  for (const opt of options) {
+    const trimmed = (opt || '').trim();
+    if (trimmed && !unique.some((u) => u.toLowerCase() === trimmed.toLowerCase())) {
+      unique.push(trimmed);
+    }
+    if (unique.length === 4) break;
+  }
+
+  if (unique.length < 4) {
+    const fallbackOpts = generateFallbackMcq(sentence, correctAnswer).options;
+    for (const fb of fallbackOpts) {
+      if (!unique.some((u) => u.toLowerCase() === fb.toLowerCase())) {
+        unique.push(fb);
+      }
+      if (unique.length === 4) break;
+    }
+  }
+
+  let padIdx = 1;
+  while (unique.length < 4) {
+    const candidate = `Alternative ${padIdx++}`;
+    if (!unique.some((u) => u.toLowerCase() === candidate.toLowerCase())) {
+      unique.push(candidate);
+    }
+  }
+
+  return shuffleArray(unique.slice(0, 4));
+}
+
 export async function generateMcqForBlank(
   sentence: string,
   blankWord: string,
@@ -135,15 +174,103 @@ Output format MUST be valid JSON matching this schema:
     const parsed = JSON.parse(rawJson);
     const validated = McqResultSchema.parse(parsed);
 
-    // Guarantee options are shuffled and include correct answer
-    if (!validated.options.includes(validated.correctAnswer)) {
-      validated.options[0] = validated.correctAnswer;
-    }
-    validated.options = shuffleArray(Array.from(new Set(validated.options)));
+    validated.correctAnswer = cleanBlank;
+    validated.options = ensureFourDistinctOptions(validated.options, cleanBlank, sentence);
 
     return validated;
   } catch (err) {
     console.warn('Gemini MCQ generation failed or produced invalid JSON, using fallback:', err);
     return generateFallbackMcq(sentence, cleanBlank);
+  }
+}
+
+export async function generateMcqBatchForBlanks(
+  items: Array<{ sentence: string; blankWord: string; sentenceWithBlank?: string }>,
+  subject?: string,
+  className?: string
+): Promise<McqOptionResult[]> {
+  if (!items || items.length === 0) {
+    return [];
+  }
+
+  if (items.length === 1) {
+    const single = await generateMcqForBlank(
+      items[0].sentence,
+      items[0].blankWord,
+      subject,
+      className
+    );
+    return [single];
+  }
+
+  if (!isGeminiConfigured()) {
+    return items.map((item) => generateFallbackMcq(item.sentence, item.blankWord.trim()));
+  }
+
+  const numberedItems = items
+    .map(
+      (item, idx) =>
+        `${idx + 1}. Sentence: "${item.sentence}" | Blank Word/Phrase: "${item.blankWord.trim()}"`
+    )
+    .join('\n');
+
+  const prompt = `
+You are an expert school exam teacher.
+Subject: ${subject || 'Science'}
+Class Level: ${className || 'School Student'}
+
+Generate multiple-choice options for each of the following ${items.length} fill-in-the-blank items:
+${numberedItems}
+
+For EACH item (preserving exact order 1 to ${items.length}):
+1. Replace the chosen blank word/phrase in the sentence with "______" to form "questionText".
+2. "correctAnswer" MUST BE EXACTLY the item's Blank Word/Phrase.
+3. Generate 3 plausible distractors belonging to the same conceptual category.
+4. "options" MUST contain 4 distinct strings: the exact "correctAnswer" and 3 distractors.
+5. Provide a friendly 1-sentence "explanation" of why "correctAnswer" is correct.
+
+Output format MUST be valid JSON matching this schema:
+{
+  "results": [
+    {
+      "questionText": "The SI unit of force is ______.",
+      "correctAnswer": "Newton",
+      "options": ["Newton", "Distractor1", "Distractor2", "Distractor3"],
+      "explanation": "Newton is the SI unit of force."
+    }
+  ]
+}
+`.trim();
+
+  try {
+    const rawJson = await callGeminiApi(prompt);
+    const parsed = JSON.parse(rawJson);
+    const rawList: any[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.results) ? parsed.results : [];
+
+    if (rawList.length === 0) {
+      throw new Error('Batch Gemini response did not contain a valid results array.');
+    }
+
+    return items.map((item, idx) => {
+      const cleanBlank = item.blankWord.trim();
+      const candidate = rawList[idx];
+      if (candidate && typeof candidate === 'object') {
+        try {
+          const validated = McqResultSchema.parse(candidate);
+          return {
+            questionText: item.sentenceWithBlank || validated.questionText,
+            correctAnswer: cleanBlank,
+            options: ensureFourDistinctOptions(validated.options, cleanBlank, item.sentence),
+            explanation: validated.explanation,
+          };
+        } catch {
+          return generateFallbackMcq(item.sentence, cleanBlank);
+        }
+      }
+      return generateFallbackMcq(item.sentence, cleanBlank);
+    });
+  } catch (err) {
+    console.warn('Gemini batch MCQ generation failed, falling back to local smart generator:', err);
+    return items.map((item) => generateFallbackMcq(item.sentence, item.blankWord.trim()));
   }
 }

@@ -166,15 +166,29 @@ export async function fetchTeacherById(teacherId: string): Promise<TeacherUser |
 
 export async function updateTeacherStatus(
   teacherId: string,
-  newStatus: 'approved' | 'rejected' | 'suspended' | 'pending',
+  newStatus: 'approved' | 'rejected' | 'suspended' | 'pending' | 'reactivate',
   adminId: string = 'admin_demo_1',
   adminName: string = 'System Admin'
 ): Promise<void> {
   let endpoint = 'approve';
-  if (newStatus === 'rejected') endpoint = 'reject';
-  if (newStatus === 'suspended') endpoint = 'suspend';
-  if (newStatus === 'approved') endpoint = 'approve';
-  if (newStatus === 'pending') endpoint = 'reactivate';
+  let resolvedStatus: 'approved' | 'rejected' | 'suspended' | 'pending' = 'approved';
+
+  if (newStatus === 'rejected') {
+    endpoint = 'reject';
+    resolvedStatus = 'rejected';
+  } else if (newStatus === 'suspended') {
+    endpoint = 'suspend';
+    resolvedStatus = 'suspended';
+  } else if (newStatus === 'reactivate') {
+    endpoint = 'reactivate';
+    resolvedStatus = 'approved';
+  } else if (newStatus === 'approved') {
+    endpoint = 'approve';
+    resolvedStatus = 'approved';
+  } else if (newStatus === 'pending') {
+    endpoint = 'reactivate';
+    resolvedStatus = 'pending';
+  }
 
   if (typeof window !== 'undefined') {
     try {
@@ -196,6 +210,7 @@ export async function updateTeacherStatus(
 
   let actionLabel = 'Teacher status updated';
   if (newStatus === 'approved') actionLabel = 'Teacher approved';
+  if (newStatus === 'reactivate') actionLabel = 'Teacher reactivated';
   if (newStatus === 'rejected') actionLabel = 'Teacher rejected';
   if (newStatus === 'suspended') actionLabel = 'Teacher suspended';
   if (newStatus === 'pending') actionLabel = 'Teacher status set to pending';
@@ -210,7 +225,7 @@ export async function updateTeacherStatus(
         targetTeacherName = snap.data().name || targetTeacherName;
       }
       await updateDoc(teacherRef, {
-        status: newStatus,
+        status: resolvedStatus,
         updatedAt: new Date().toISOString(),
       });
 
@@ -222,7 +237,7 @@ export async function updateTeacherStatus(
         targetTeacherId: teacherId,
         targetTeacherName,
         timestamp: new Date().toISOString(),
-        metadata: { newStatus },
+        metadata: { newStatus: resolvedStatus },
       });
       return;
     } catch (err) {
@@ -234,7 +249,7 @@ export async function updateTeacherStatus(
   const index = teachers.findIndex((t) => t.uid === teacherId);
   if (index >= 0) {
     targetTeacherName = teachers[index].name;
-    teachers[index].status = newStatus;
+    teachers[index].status = resolvedStatus;
     teachers[index].updatedAt = new Date().toISOString();
     saveLocalTeachers(teachers);
   }
@@ -247,7 +262,7 @@ export async function updateTeacherStatus(
     targetTeacherId: teacherId,
     targetTeacherName,
     timestamp: new Date().toISOString(),
-    metadata: { newStatus },
+    metadata: { newStatus: resolvedStatus },
   });
 }
 
@@ -322,19 +337,6 @@ export async function fetchAdminActivityLogs(): Promise<AdminActivityLog[]> {
 }
 
 export async function logAiUsage(log: AiUsageLog): Promise<void> {
-  if (isFirebaseConfigured && db) {
-    try {
-      const docRef = doc(db, 'aiUsage', log.id);
-      await setDoc(docRef, {
-        ...log,
-        serverTimestamp: serverTimestamp(),
-      });
-      return;
-    } catch (err) {
-      console.warn('Firestore logAiUsage failed:', err);
-    }
-  }
-
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_AI_LOGS);
@@ -398,6 +400,36 @@ export async function fetchAiUsageLogs(): Promise<AiUsageLog[]> {
   ];
 }
 
+export async function fetchAllPlatformExams() {
+  if (typeof window !== 'undefined') {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/exams', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.exams)) {
+          return data.exams;
+        }
+      }
+    } catch (e) {
+      console.warn('API /api/admin/exams failed:', e);
+    }
+  }
+
+  if (isFirebaseConfigured && db) {
+    try {
+      const snapshot = await getDocs(collection(db, 'exams'));
+      const exams = snapshot.docs.map((docSnap) => docSnap.data() as any);
+      exams.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return exams;
+    } catch (err) {
+      console.warn('Firestore fetchAllPlatformExams fallback failed:', err);
+    }
+  }
+
+  return [];
+}
+
 export async function fetchPlatformStats() {
   if (typeof window !== 'undefined') {
     try {
@@ -406,7 +438,11 @@ export async function fetchPlatformStats() {
       if (res.ok) {
         const data = await res.json();
         if (data.stats) {
-          return data.stats;
+          return {
+            ...data.stats,
+            recentLogs: Array.isArray(data.recentLogs) ? data.recentLogs : undefined,
+            pendingList: Array.isArray(data.pendingList) ? data.pendingList : undefined,
+          };
         }
       }
     } catch (e) {
@@ -414,14 +450,16 @@ export async function fetchPlatformStats() {
     }
   }
 
-  const teachers = await fetchAllTeachers();
+  const [teachers, aiLogs, exams] = await Promise.all([
+    fetchAllTeachers(),
+    fetchAiUsageLogs(),
+    fetchAllPlatformExams(),
+  ]);
   const totalTeachers = teachers.length;
   const pendingTeachers = teachers.filter((t) => t.status === 'pending').length;
   const approvedTeachers = teachers.filter((t) => t.status === 'approved').length;
   const suspendedTeachers = teachers.filter((t) => t.status === 'suspended').length;
   const rejectedTeachers = teachers.filter((t) => t.status === 'rejected').length;
-
-  const aiLogs = await fetchAiUsageLogs();
 
   return {
     totalTeachers,
@@ -429,6 +467,8 @@ export async function fetchPlatformStats() {
     approvedTeachers,
     suspendedTeachers,
     rejectedTeachers,
+    totalExams: exams.length,
     totalAiRequests: aiLogs.length,
+    pendingList: teachers.filter((t) => t.status === 'pending'),
   };
 }

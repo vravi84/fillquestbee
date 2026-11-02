@@ -13,7 +13,7 @@ env:
   - variable: FIREBASE_PRIVATE_KEY
     secret: FIREBASE_PRIVATE_KEY
   - variable: GEMINI_MODEL
-    value: "gemini-3.5-flash"
+    value: "gemini-2.5-flash"
     availability:
       - RUNTIME
   - variable: INITIAL_ADMIN_EMAIL

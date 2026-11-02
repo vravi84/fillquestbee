@@ -19,6 +19,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
     }
 
+    function isExamOwner(examId) {
+      return isAuthenticated() &&
+        isApprovedTeacher() &&
+        exists(/databases/$(database)/documents/exams/$(examId)) &&
+        get(/databases/$(database)/documents/exams/$(examId)).data.teacherId == request.auth.uid;
+    }
+
     // User profiles collection
     match /users/{userId} {
       // Users can read their own profile; admins can read all profiles
@@ -40,20 +47,25 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Exam documents - public read for student test taking; write restricted to approved teachers or admins
+    // Exam documents - public read restricted to published exams; drafts restricted to owning approved teacher or admins
     match /exams/{examId} {
-      allow read: if true;
+      allow read: if (!('status' in resource.data) || resource.data.status == 'published') || (
+        isAuthenticated() && (
+          (resource.data.teacherId == request.auth.uid && isApprovedTeacher()) || isAdmin()
+        )
+      );
       allow create: if isAuthenticated() && (isApprovedTeacher() || isAdmin());
       allow update, delete: if isAuthenticated() && (
         (resource.data.teacherId == request.auth.uid && isApprovedTeacher()) || isAdmin()
       );
     }
 
-    // Exam Attempts - public create for students; read restricted to teacher owner or admin
+    // Exam Attempts - public create for students; read and delete restricted to exam owner (approved teacher) or admin
     match /attempts/{attemptId} {
-      allow create: if true;
-      allow read: if isAuthenticated();
-      allow update, delete: if isAdmin();
+      allow create: if request.resource.data.examId is string && request.resource.data.studentName is string;
+      allow read: if isAuthenticated() && (isExamOwner(resource.data.examId) || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAuthenticated() && (isExamOwner(resource.data.examId) || isAdmin());
     }
 
     // Admin Activity Audit Logs - restricted to admins
@@ -62,11 +74,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // AI Usage Logs - read restricted to admins
+    // AI Usage Logs - server Admin SDK writes directly; client access restricted to admins only
     match /aiUsage/{usageId} {
       allow read: if isAdmin();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

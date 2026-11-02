@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { fetchPlatformStats, fetchAdminActivityLogs, fetchAllTeachers } from '@/lib/firebase/admin';
-import { fetchTeacherExams } from '@/lib/firebase/services';
 import { AdminActivityLog, TeacherUser } from '@/types';
 import {
   Users,
@@ -37,21 +36,21 @@ export default function AdminDashboardPage() {
     try {
       const s = await fetchPlatformStats();
       setStats(s);
+      setTotalExams(s.totalExams ?? 0);
 
-      const logs = await fetchAdminActivityLogs();
-      setRecentLogs(logs.slice(0, 5));
-
-      const teachers = await fetchAllTeachers();
-      const pending = teachers.filter((t) => t.status === 'pending');
-      setPendingList(pending);
-
-      // Collect total exams across teachers
-      let examCount = 0;
-      for (const t of teachers) {
-        const list = await fetchTeacherExams(t.uid);
-        examCount += list.length;
+      if (Array.isArray(s.recentLogs)) {
+        setRecentLogs(s.recentLogs.slice(0, 5));
+      } else {
+        const logs = await fetchAdminActivityLogs();
+        setRecentLogs(logs.slice(0, 5));
       }
-      setTotalExams(examCount);
+
+      if (Array.isArray(s.pendingList)) {
+        setPendingList(s.pendingList);
+      } else {
+        const teachers = await fetchAllTeachers();
+        setPendingList(teachers.filter((t) => t.status === 'pending'));
+      }
     } catch (err) {
       console.error('Failed to load admin stats:', err);
     } finally {

@@ -53,6 +53,7 @@ export default function AdminLoginPage() {
   };
 
   const handleDemoAdmin = () => {
+    if (process.env.NODE_ENV !== 'development') return;
     loginAsDemoAdmin();
     router.push('/admin/dashboard');
   };
@@ -70,18 +71,20 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        {/* Development Demo Admin Banner */}
-        <div className="mb-6 p-4 rounded-2xl bg-indigo-950/60 border border-indigo-800/50 text-center">
-          <p className="text-xs font-semibold text-indigo-200 mb-2">Development Demo Admin Access</p>
-          <button
-            type="button"
-            onClick={handleDemoAdmin}
-            className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2"
-          >
-            <KeyRound className="w-4 h-4" />
-            Login as Demo Administrator
-          </button>
-        </div>
+        {/* Development Demo Admin Banner (Development Only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-6 p-4 rounded-2xl bg-indigo-950/60 border border-indigo-800/50 text-center">
+            <p className="text-xs font-semibold text-indigo-200 mb-2">Development Demo Admin Access</p>
+            <button
+              type="button"
+              onClick={handleDemoAdmin}
+              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              Login as Demo Administrator
+            </button>
+          </div>
+        )}
 
         {errorState && (
           <div className="mb-6">

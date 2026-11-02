@@ -55,9 +55,25 @@ export default function Step4BlankSelector({
       const current = prev[sentenceId] || [];
       let updated: number[];
       if (current.includes(wordIndex)) {
-        updated = current.filter((i) => i !== wordIndex);
+        const min = Math.min(...current);
+        const max = Math.max(...current);
+        if (wordIndex === min || wordIndex === max) {
+          updated = current.filter((i) => i !== wordIndex);
+        } else {
+          // Deselecting a middle word trims the phrase from that word onward to keep selection contiguous
+          updated = current.filter((i) => i < wordIndex);
+        }
+      } else if (current.length === 0) {
+        updated = [wordIndex];
       } else {
-        updated = [...current, wordIndex].sort((a, b) => a - b);
+        const min = Math.min(...current);
+        const max = Math.max(...current);
+        if (wordIndex === min - 1 || wordIndex === max + 1) {
+          updated = [...current, wordIndex].sort((a, b) => a - b);
+        } else {
+          // Clicking a non-adjacent word starts a new selection at that word
+          updated = [wordIndex];
+        }
       }
       return { ...prev, [sentenceId]: updated };
     });
@@ -90,7 +106,10 @@ export default function Step4BlankSelector({
     });
 
     const targetWord = targetCleanWords.join(' ');
-    const sentenceWithBlank = processedTokens.join('');
+    // Collapse consecutive blanks (from multi-word selections) into a single ______ token
+    const sentenceWithBlank = processedTokens
+      .join('')
+      .replace(/______(?:[.,!?;:]*\s+______)+/g, '______');
 
     return { targetWord, sentenceWithBlank };
   };

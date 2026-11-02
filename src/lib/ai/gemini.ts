@@ -2,9 +2,17 @@ import { GoogleGenAI } from '@google/genai';
 
 /**
  * Centralized Gemini model configuration.
- * Configured via server-side process.env.GEMINI_MODEL with a sensible supported default ('gemini-3.5-flash').
+ * Configured via server-side process.env.GEMINI_MODEL with a sensible supported default ('gemini-2.5-flash').
  */
-export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const envModel = process.env.GEMINI_MODEL;
+export const DEFAULT_GEMINI_MODEL =
+  envModel && envModel !== 'gemini-3.5-flash' ? envModel : 'gemini-2.5-flash';
+
+/**
+ * Feature flag for file extraction (PDF / Image / DOCX).
+ * Defaults to false for initial low-cost / text-only production workflow.
+ */
+export const AI_FILE_EXTRACTION_ENABLED = process.env.AI_FILE_EXTRACTION_ENABLED === 'true';
 
 /**
  * Safely resolves the server-side GEMINI_API_KEY at runtime.
@@ -18,13 +26,15 @@ export function isGeminiConfigured(): boolean {
   return Boolean(key && key.length > 5 && key !== 'YOUR_GEMINI_API_KEY');
 }
 
+let cachedKey: string | null = null;
 let aiClient: GoogleGenAI | null = null;
 
 export function getAiClient(): GoogleGenAI | null {
   const key = getGeminiApiKey();
   if (key && key.length > 5 && key !== 'YOUR_GEMINI_API_KEY') {
     try {
-      if (!aiClient) {
+      if (!aiClient || cachedKey !== key) {
+        cachedKey = key;
         aiClient = new GoogleGenAI({ apiKey: key });
       }
       return aiClient;
@@ -52,8 +62,8 @@ export async function callGeminiApi(prompt: string, imageBase64?: string, mimeTy
   }
 
   // Active supported models in priority order (starting with centralized DEFAULT_GEMINI_MODEL)
-  const primaryModel = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const candidateModels = Array.from(new Set([primaryModel, 'gemini-flash-latest']));
+  const primaryModel = DEFAULT_GEMINI_MODEL;
+  const candidateModels = Array.from(new Set([primaryModel, 'gemini-2.0-flash', 'gemini-flash-latest']));
 
   let lastError = '';
   let isQuotaExhausted = false;

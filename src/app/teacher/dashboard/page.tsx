@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import { fetchTeacherExams, deleteExam, fetchExamAttempts } from '@/lib/firebase/services';
+import { useAuth, isInitialAdminEmail } from '@/context/AuthContext';
+import { fetchTeacherDashboardData, deleteExam } from '@/lib/firebase/services';
 import { Exam, ExamAttempt } from '@/types';
 import DashboardCards from '@/components/teacher/DashboardCards';
 import ExamTable from '@/components/teacher/ExamTable';
@@ -21,15 +21,8 @@ export default function TeacherDashboardPage() {
     if (!user) return;
     setLoadingData(true);
     try {
-      const examList = await fetchTeacherExams(user.uid);
+      const { exams: examList, attempts: allAttempts } = await fetchTeacherDashboardData(user.uid);
       setExams(examList);
-
-      // Collect all attempts across teacher's exams
-      let allAttempts: ExamAttempt[] = [];
-      for (const e of examList) {
-        const atts = await fetchExamAttempts(e.id);
-        allAttempts = [...allAttempts, ...atts];
-      }
       setAttempts(allAttempts);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -44,6 +37,10 @@ export default function TeacherDashboardPage() {
       return;
     }
     if (user) {
+      if (user.role === 'admin' || isInitialAdminEmail(user.email)) {
+        router.push('/admin/dashboard');
+        return;
+      }
       if (user.role === 'teacher') {
         if (user.status === 'pending') {
           router.push('/teacher/pending');

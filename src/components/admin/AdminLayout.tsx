@@ -10,6 +10,7 @@ import {
   BookOpen,
   Sparkles,
   Activity,
+  Cpu,
   LogOut,
   ShieldCheck,
   Menu,
@@ -61,6 +62,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       label: 'Activity Audit Log',
       href: '/admin/activity',
       icon: Activity,
+    },
+    {
+      label: 'System Diagnostics',
+      href: '/admin/diagnostics',
+      icon: Cpu,
     },
   ];
 

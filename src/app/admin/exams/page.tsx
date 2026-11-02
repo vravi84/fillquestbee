@@ -3,8 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { fetchAllTeachers } from '@/lib/firebase/admin';
-import { fetchTeacherExams } from '@/lib/firebase/services';
+import { fetchAllPlatformExams } from '@/lib/firebase/admin';
 import { Exam } from '@/types';
 import { BookOpen, Search, ExternalLink, RefreshCw } from 'lucide-react';
 
@@ -16,12 +15,7 @@ export default function AdminExamsPage() {
   const loadExams = async () => {
     setLoading(true);
     try {
-      const teachers = await fetchAllTeachers();
-      let allExams: Exam[] = [];
-      for (const t of teachers) {
-        const list = await fetchTeacherExams(t.uid);
-        allExams = [...allExams, ...list];
-      }
+      const allExams = await fetchAllPlatformExams();
       setExams(allExams);
     } catch (err) {
       console.error('Failed to load platform exams:', err);

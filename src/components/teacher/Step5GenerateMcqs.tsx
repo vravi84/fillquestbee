@@ -28,66 +28,113 @@ export default function Step5GenerateMcqs({
   onNext,
   onBack,
 }: Step5Props) {
-  const { user } = useAuth();
+  const { user, getIdToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [progressCount, setProgressCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const generateAllMcqs = async () => {
+    if (!user) {
+      setErrorMsg('Please log in again to continue.');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
     setProgressCount(0);
 
+    let token = '';
+    try {
+      token = (await getIdToken()) || '';
+    } catch (tokenErr) {
+      console.warn('Failed to retrieve ID token:', tokenErr);
+      setErrorMsg('Your login session has expired. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    if (!token) {
+      setErrorMsg('Your login session has expired. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
     const questionsList: Question[] = [];
+    setProgressCount(selectedBlanks.length);
 
-    for (let i = 0; i < selectedBlanks.length; i++) {
-      const item = selectedBlanks[i];
-      setProgressCount(i + 1);
-
-      try {
-        const res = await fetch('/api/ai/generate-mcq', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user?.uid || 'teacher_demo_1',
-          },
-          body: JSON.stringify({
+    try {
+      const res = await fetch('/api/ai/generate-mcq', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items: selectedBlanks.map((item) => ({
             sentence: item.originalSentence,
             blankWord: item.targetBlankWord,
-            subject: formData.subject,
-            className: formData.className,
-          }),
-        });
+            sentenceWithBlank: item.sentenceWithBlank,
+          })),
+          subject: formData.subject,
+          className: formData.className,
+        }),
+      });
 
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || `Failed to generate option for item ${i + 1}`);
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Your login session is invalid or expired. Please sign in again.');
         }
+        throw new Error(data.error || 'Failed to generate MCQ options.');
+      }
 
+      const batchResults = Array.isArray(data.results) ? data.results : [];
+
+      selectedBlanks.forEach((item, i) => {
+        const mcq = batchResults[i] || {};
         questionsList.push({
           id: generateId('q'),
           originalSentence: item.originalSentence,
-          sentenceWithBlank: data.questionText || item.sentenceWithBlank,
+          sentenceWithBlank: item.sentenceWithBlank || mcq.questionText,
           targetBlankWord: item.targetBlankWord,
-          correctAnswer: data.correctAnswer || item.targetBlankWord,
-          options: data.options || [item.targetBlankWord, 'Option 2', 'Option 3', 'Option 4'],
-          explanation: data.explanation || `The correct answer is ${item.targetBlankWord}.`,
+          correctAnswer: mcq.correctAnswer || item.targetBlankWord,
+          options:
+            Array.isArray(mcq.options) && mcq.options.length === 4
+              ? mcq.options
+              : [item.targetBlankWord, 'Alternative A', 'Alternative B', 'Alternative C'],
+          explanation: mcq.explanation || `The correct answer is ${item.targetBlankWord}.`,
           order: i + 1,
         });
-      } catch (err: any) {
-        console.warn(`Fallback triggered for item ${i + 1}:`, err);
-        // Fallback local distractor assembly
+      });
+    } catch (err: any) {
+      console.warn('Error generating batch MCQs:', err);
+      const msg = err?.message || String(err);
+
+      if (
+        msg.includes('session') ||
+        msg.includes('Access Denied') ||
+        msg.includes('Forbidden') ||
+        msg.includes('Unauthorized') ||
+        msg.includes('pending administrator approval')
+      ) {
+        setErrorMsg(msg);
+        setLoading(false);
+        return;
+      }
+
+      // Subject-neutral fallback distractor assembly for transient non-auth API issues
+      selectedBlanks.forEach((item, i) => {
         questionsList.push({
           id: generateId('q'),
           originalSentence: item.originalSentence,
           sentenceWithBlank: item.sentenceWithBlank,
           targetBlankWord: item.targetBlankWord,
           correctAnswer: item.targetBlankWord,
-          options: [item.targetBlankWord, 'Joule', 'Watt', 'Pascal'],
+          options: [item.targetBlankWord, 'Alternative A', 'Alternative B', 'Alternative C'],
           explanation: `${item.targetBlankWord} is the correct answer to complete this sentence.`,
           order: i + 1,
         });
-      }
+      });
     }
 
     onQuestionsGenerated(questionsList);
@@ -123,6 +170,22 @@ export default function Step5GenerateMcqs({
           Regenerate All MCQs
         </button>
       </div>
+
+      {/* Error View */}
+      {errorMsg && !loading && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+            <span>{errorMsg}</span>
+          </div>
+          <button
+            onClick={generateAllMcqs}
+            className="text-xs font-bold px-3 py-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
 
       {/* Loading Progress Bar */}
       {loading && (

@@ -33,7 +33,13 @@ export default function AdminAiUsagePage() {
       (log.teacherName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.teacherId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.details || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesOp = operationFilter === 'all' || log.operation === operationFilter;
+    const opUpper = (log.operation || '').toUpperCase();
+    const matchesOp =
+      operationFilter === 'all' ||
+      (operationFilter === 'TEXT_EXTRACTION' &&
+        (opUpper === 'TEXT_EXTRACTION' || opUpper === 'EXTRACT_CONTENT')) ||
+      (operationFilter === 'MCQ_GENERATION' &&
+        (opUpper === 'MCQ_GENERATION' || opUpper === 'GENERATE_MCQ'));
     return matchesSearch && matchesOp;
   });
 
@@ -64,17 +70,21 @@ export default function AdminAiUsagePage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-1 bg-slate-900 p-1 border border-slate-800 rounded-xl overflow-x-auto">
-            {['all', 'extract_content', 'generate_mcq'].map((tab) => (
+            {[
+              { id: 'all', label: 'All Operations' },
+              { id: 'TEXT_EXTRACTION', label: 'Text Extraction' },
+              { id: 'MCQ_GENERATION', label: 'MCQ Generation' },
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setOperationFilter(tab)}
+                key={tab.id}
+                onClick={() => setOperationFilter(tab.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                  operationFilter === tab
+                  operationFilter === tab.id
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {tab === 'all' ? 'All Operations' : tab}
+                {tab.label}
               </button>
             ))}
           </div>

@@ -19,6 +19,21 @@ import { TeacherUser } from '@/types';
 export interface AuthResult {
   success: boolean;
   error?: AppError;
+  isAdmin?: boolean;
+}
+
+const INITIAL_ADMIN_EMAILS = [
+  'sciencevid4u@gmail.com',
+  'admin@school.edu',
+];
+
+export function isInitialAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (INITIAL_ADMIN_EMAILS.includes(normalized)) return true;
+  const envEmail = process.env.NEXT_PUBLIC_INITIAL_ADMIN_EMAIL || process.env.INITIAL_ADMIN_EMAIL;
+  if (envEmail && normalized === envEmail.trim().toLowerCase()) return true;
+  return false;
 }
 
 interface AuthContextType {
@@ -84,9 +99,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured && auth) {
       const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
         if (fbUser) {
-          let teacherName = fbUser.displayName || fbUser.email?.split('@')[0] || 'Teacher';
-          let role: any = 'teacher';
-          let status: any = 'pending';
+          let teacherName = fbUser.displayName || fbUser.email?.split('@')[0] || 'User';
+          const isAdminByEmail = isInitialAdminEmail(fbUser.email);
+          let role: any = isAdminByEmail ? 'admin' : 'teacher';
+          let status: any = isAdminByEmail ? 'active' : 'pending';
 
           // Force ID token refresh to ensure custom claims are read
           try {
@@ -106,8 +122,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (snap.exists()) {
                 const data = snap.data();
                 teacherName = data.name || teacherName;
-                role = data.role || role;
-                status = data.status || (role === 'admin' ? 'active' : 'pending');
+                if (isAdminByEmail) {
+                  role = 'admin';
+                  status = 'active';
+                  if (data.role !== 'admin' || data.status !== 'active') {
+                    await setDoc(docRef, { ...data, role: 'admin', status: 'active' }, { merge: true });
+                  }
+                } else {
+                  role = data.role || role;
+                  status = data.status || (role === 'admin' ? 'active' : 'pending');
+                }
               } else {
                 // Create default document for user if missing
                 await setDoc(docRef, {
@@ -162,29 +186,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('cdf_demo_user');
         setIsDemoAccount(false);
 
+        const isAdminByEmail = isInitialAdminEmail(cred.user.email || email);
+        let role: any = isAdminByEmail ? 'admin' : 'teacher';
+        let status: any = isAdminByEmail ? 'active' : 'pending';
+        let name = cred.user.displayName || email.split('@')[0] || 'User';
+
         if (db && cred.user) {
-          const snap = await getDoc(doc(db, 'users', cred.user.uid));
+          const docRef = doc(db, 'users', cred.user.uid);
+          const snap = await getDoc(docRef);
           if (snap.exists()) {
             const data = snap.data();
-            setUser({
+            name = data.name || name;
+            if (isAdminByEmail) {
+              role = 'admin';
+              status = 'active';
+              if (data.role !== 'admin' || data.status !== 'active') {
+                await setDoc(docRef, { ...data, role: 'admin', status: 'active' }, { merge: true });
+              }
+            } else {
+              role = data.role || role;
+              status = data.status || status;
+            }
+          } else {
+            await setDoc(docRef, {
               uid: cred.user.uid,
-              name: data.name || cred.user.displayName || 'Teacher',
+              name,
               email: cred.user.email || email,
-              role: data.role || 'teacher',
-              status: data.status || 'pending',
-              createdAt: data.createdAt || new Date().toISOString(),
+              role,
+              status,
+              createdAt: new Date().toISOString(),
             });
           }
         }
-        return { success: true };
+
+        setUser({
+          uid: cred.user.uid,
+          name,
+          email: cred.user.email || email,
+          role,
+          status,
+          createdAt: new Date().toISOString(),
+        });
+        return { success: true, isAdmin: role === 'admin' };
       } catch (err: any) {
         const parsed = parseServerError(err);
         return { success: false, error: parsed };
       }
     } else {
-      if (email.toLowerCase().includes('admin')) {
+      if (email.toLowerCase().includes('admin') || isInitialAdminEmail(email)) {
         loginAsDemoAdmin();
-        return { success: true };
+        return { success: true, isAdmin: true };
       }
       const demoUser: TeacherUser = {
         uid: `teacher_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
@@ -197,7 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(demoUser);
       setIsDemoAccount(true);
       localStorage.setItem('cdf_demo_user', JSON.stringify(demoUser));
-      return { success: true };
+      return { success: true, isAdmin: false };
     }
   };
 
@@ -209,37 +260,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('cdf_demo_user');
         setIsDemoAccount(false);
 
+        const isAdminByEmail = isInitialAdminEmail(cred.user.email);
+        let role: any = isAdminByEmail ? 'admin' : 'teacher';
+        let status: any = isAdminByEmail ? 'active' : 'pending';
+
         if (db && cred.user) {
           const docRef = doc(db, 'users', cred.user.uid);
           const snap = await getDoc(docRef);
-          let role: any = 'teacher';
-          let status: any = 'pending';
 
           if (snap.exists()) {
             const data = snap.data();
-            role = data.role || 'teacher';
-            status = data.status || 'pending';
+            if (isAdminByEmail) {
+              role = 'admin';
+              status = 'active';
+              if (data.role !== 'admin' || data.status !== 'active') {
+                await setDoc(docRef, { ...data, role: 'admin', status: 'active' }, { merge: true });
+              }
+            } else {
+              role = data.role || role;
+              status = data.status || status;
+            }
           } else {
             await setDoc(docRef, {
               uid: cred.user.uid,
-              name: cred.user.displayName || 'Teacher',
+              name: cred.user.displayName || 'User',
               email: cred.user.email || '',
-              role: 'teacher',
-              status: 'pending',
+              role,
+              status,
               createdAt: new Date().toISOString(),
             });
           }
-
-          setUser({
-            uid: cred.user.uid,
-            name: cred.user.displayName || 'Teacher',
-            email: cred.user.email || '',
-            role,
-            status,
-            createdAt: new Date().toISOString(),
-          });
         }
-        return { success: true };
+
+        setUser({
+          uid: cred.user.uid,
+          name: cred.user.displayName || 'User',
+          email: cred.user.email || '',
+          role,
+          status,
+          createdAt: new Date().toISOString(),
+        });
+        return { success: true, isAdmin: role === 'admin' };
       } catch (err: any) {
         const parsed = parseServerError(err);
         return { success: false, error: parsed };
@@ -257,19 +318,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('cdf_demo_user');
         setIsDemoAccount(false);
 
+        const isAdminByEmail = isInitialAdminEmail(cred.user.email || email);
+
         // Force token refresh to verify admin claim
         const tokenResult = await cred.user.getIdTokenResult(true);
         const hasAdminClaim = tokenResult.claims.admin === true || tokenResult.claims.role === 'admin';
 
         let firestoreRole = '';
         if (db) {
-          const snap = await getDoc(doc(db, 'users', cred.user.uid));
+          const docRef = doc(db, 'users', cred.user.uid);
+          const snap = await getDoc(docRef);
           if (snap.exists()) {
             firestoreRole = snap.data().role;
+            if (isAdminByEmail && (snap.data().role !== 'admin' || snap.data().status !== 'active')) {
+              await setDoc(docRef, { role: 'admin', status: 'active' }, { merge: true });
+            }
           }
         }
 
-        if (!hasAdminClaim && firestoreRole !== 'admin') {
+        if (!isAdminByEmail && !hasAdminClaim && firestoreRole !== 'admin') {
           await firebaseSignOut(auth);
           setUser(null);
           return {
@@ -291,14 +358,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           status: 'active',
           createdAt: new Date().toISOString(),
         });
-        return { success: true };
+        return { success: true, isAdmin: true };
       } catch (err: any) {
         const parsed = parseServerError(err);
         return { success: false, error: parsed };
       }
     } else {
       loginAsDemoAdmin();
-      return { success: true };
+      return { success: true, isAdmin: true };
     }
   };
 
@@ -310,19 +377,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('cdf_demo_user');
         setIsDemoAccount(false);
 
+        const isAdminByEmail = isInitialAdminEmail(cred.user.email);
+
         // Force token refresh to verify custom claim admin === true
         const tokenResult = await cred.user.getIdTokenResult(true);
         const hasAdminClaim = tokenResult.claims.admin === true || tokenResult.claims.role === 'admin';
 
         let firestoreRole = '';
         if (db) {
-          const snap = await getDoc(doc(db, 'users', cred.user.uid));
+          const docRef = doc(db, 'users', cred.user.uid);
+          const snap = await getDoc(docRef);
           if (snap.exists()) {
             firestoreRole = snap.data().role;
+            if (isAdminByEmail && (snap.data().role !== 'admin' || snap.data().status !== 'active')) {
+              await setDoc(docRef, { role: 'admin', status: 'active' }, { merge: true });
+            }
           }
         }
 
-        if (!hasAdminClaim && firestoreRole !== 'admin') {
+        if (!isAdminByEmail && !hasAdminClaim && firestoreRole !== 'admin') {
           await firebaseSignOut(auth);
           setUser(null);
           return {
@@ -344,14 +417,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           status: 'active',
           createdAt: new Date().toISOString(),
         });
-        return { success: true };
+        return { success: true, isAdmin: true };
       } catch (err: any) {
         const parsed = parseServerError(err);
         return { success: false, error: parsed };
       }
     } else {
       loginAsDemoAdmin();
-      return { success: true };
+      return { success: true, isAdmin: true };
     }
   };
 

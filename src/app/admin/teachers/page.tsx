@@ -52,8 +52,9 @@ export default function AdminTeachersPage() {
     if (!selectedTeacher || !modalAction) return;
     setIsProcessing(true);
 
-    let targetStatus: 'approved' | 'rejected' | 'suspended' | 'pending' = 'approved';
-    if (modalAction === 'approve' || modalAction === 'reactivate') targetStatus = 'approved';
+    let targetStatus: 'approved' | 'rejected' | 'suspended' | 'pending' | 'reactivate' = 'approved';
+    if (modalAction === 'approve') targetStatus = 'approved';
+    if (modalAction === 'reactivate') targetStatus = 'reactivate';
     if (modalAction === 'reject') targetStatus = 'rejected';
     if (modalAction === 'suspend') targetStatus = 'suspended';
 
@@ -223,7 +224,11 @@ export default function AdminTeachersPage() {
                         <button
                           onClick={() => {
                             setSelectedTeacher(t);
-                            setModalAction(t.status === 'pending' ? 'approve' : 'approve');
+                            setModalAction(
+                              t.status === 'suspended' || t.status === 'rejected'
+                                ? 'reactivate'
+                                : 'approve'
+                            );
                           }}
                           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-all"
                         >

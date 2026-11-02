@@ -167,7 +167,7 @@ export default function DndQuestion({
   };
 
   const handleTapOptionSelect = (optionText: string) => {
-    if (isAnswered) return;
+    if (isCorrect === true) return;
     if (selectedTapOption === optionText) {
       setSelectedTapOption(null);
     } else {
@@ -176,14 +176,16 @@ export default function DndQuestion({
   };
 
   const handleTapBlankPlace = () => {
-    if (selectedTapOption && !isAnswered) {
+    if (selectedTapOption && isCorrect !== true) {
       handleOptionDrop(selectedTapOption);
     }
   };
 
   // Render sentence with blank component inserted
   const renderSentence = () => {
-    const parts = question.sentenceWithBlank.split('______');
+    const normalizedSentence = question.sentenceWithBlank.replace(/______(?:[.,!?;:]*\s+______)+/g, '______');
+    const parts = normalizedSentence.split('______');
+    const afterBlank = parts.slice(1).join(' ______ ');
     return (
       <div className="text-lg sm:text-2xl 2xl:text-3xl 3xl:text-4xl font-extrabold text-slate-800 leading-relaxed text-center py-6 sm:py-8 2xl:py-12 px-4 sm:px-8 2xl:px-12 bg-indigo-50/40 rounded-3xl border border-indigo-100 mb-6 sm:mb-8 2xl:mb-12 shadow-xs flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <span>{parts[0]}</span>
@@ -193,7 +195,7 @@ export default function DndQuestion({
           isCorrect={isCorrect}
           onTapPlace={handleTapBlankPlace}
         />
-        <span>{parts[1] || ''}</span>
+        <span>{afterBlank}</span>
       </div>
     );
   };

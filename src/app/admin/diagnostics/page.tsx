@@ -16,7 +16,7 @@ interface DiagnosticItem {
 }
 
 export default function AdminDiagnosticsPage() {
-  const { user, isApprovedTeacher, isAdmin } = useAuth();
+  const { user, isApprovedTeacher, isAdmin, getIdToken } = useAuth();
   const [running, setRunning] = useState(false);
   const [items, setItems] = useState<DiagnosticItem[]>([
     { id: 'firebase', name: 'Firebase Connection', category: 'Infrastructure', status: 'PENDING' },
@@ -65,23 +65,33 @@ export default function AdminDiagnosticsPage() {
 
     // 4. Firestore
     try {
-      if (db) {
-        const testRef = doc(db, 'system', 'diagnostics_ping');
-        await setDoc(testRef, { lastPing: new Date().toISOString() }, { merge: true });
-        updateItemStatus('firestore', 'PASS', 'Firestore read/write ping verified');
+      if (db && user?.uid) {
+        const userRef = doc(db, 'users', user.uid);
+        await getDoc(userRef);
+        updateItemStatus('firestore', 'PASS', 'Firestore authenticated read ping verified');
+      } else if (db) {
+        updateItemStatus('firestore', 'PASS', 'Firestore client initialized');
       } else {
-        updateItemStatus('firestore', 'PASS', 'Firestore client initialized in memory');
+        updateItemStatus('firestore', 'FAIL', 'Firestore client is not initialized');
       }
     } catch (err: any) {
-      updateItemStatus('firestore', 'PASS', 'Firestore service accessible');
+      updateItemStatus('firestore', 'FAIL', err?.message || 'Firestore connection check failed');
     }
+
+    let token = '';
+    try {
+      token = (await getIdToken()) || '';
+    } catch (tokenErr) {
+      console.warn('Failed to retrieve token for admin diagnostics:', tokenErr);
+    }
+    const authHeader: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
 
     // 5 & 6. Gemini Configuration & Connectivity
     let isApiWorking = false;
     try {
       const res = await fetch('/api/diagnostics/gemini', {
         headers: {
-          'x-user-id': user?.uid || 'admin_demo_1',
+          ...authHeader,
         },
       });
       const data = await res.json();
@@ -109,7 +119,7 @@ export default function AdminDiagnosticsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.uid || 'admin_demo_1',
+          ...authHeader,
         },
         body: JSON.stringify({
           text: 'The SI unit of force is Newton. Force is a push or pull acting on an object.',
@@ -129,12 +139,12 @@ export default function AdminDiagnosticsPage() {
     // 8. Image Extraction Test
     try {
       // 1x1 pixel tiny transparent PNG base64 for synthetic diagnostic call
-      const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+      const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORUS5CYII=';
       const imgRes = await fetch('/api/ai/extract-content', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.uid || 'admin_demo_1',
+          ...authHeader,
         },
         body: JSON.stringify({
           imageBase64: sampleBase64,
@@ -145,6 +155,8 @@ export default function AdminDiagnosticsPage() {
       const imgData = await imgRes.json();
       if (imgRes.ok && imgData.sentences) {
         updateItemStatus('image_extract', 'PASS', `Multimodal image processing API call successful (${imgData.sentences.length} sentences returned)`);
+      } else if (imgRes.status === 400 && (imgData.error || '').includes('disabled')) {
+        updateItemStatus('image_extract', 'PASS', 'Disabled by feature flag (AI_FILE_EXTRACTION_ENABLED=false)');
       } else {
         updateItemStatus('image_extract', 'FAIL', imgData.error || 'Image extraction pipeline error');
       }
@@ -160,7 +172,7 @@ export default function AdminDiagnosticsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.uid || 'admin_demo_1',
+          ...authHeader,
         },
         body: JSON.stringify({
           imageBase64: samplePdfBase64,
@@ -171,6 +183,8 @@ export default function AdminDiagnosticsPage() {
       const pdfData = await pdfRes.json();
       if (pdfRes.ok && pdfData.sentences) {
         updateItemStatus('pdf_extract', 'PASS', `PDF document understanding pipeline call successful`);
+      } else if (pdfRes.status === 400 && (pdfData.error || '').includes('disabled')) {
+        updateItemStatus('pdf_extract', 'PASS', 'Disabled by feature flag (AI_FILE_EXTRACTION_ENABLED=false)');
       } else {
         updateItemStatus('pdf_extract', 'FAIL', pdfData.error || 'PDF extraction pipeline error');
       }
@@ -184,7 +198,7 @@ export default function AdminDiagnosticsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.uid || 'admin_demo_1',
+          ...authHeader,
         },
         body: JSON.stringify({
           sentence: 'The SI unit of force is Newton.',

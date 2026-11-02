@@ -35,7 +35,7 @@ export interface AiUsageLog {
   id: string;
   teacherId: string;
   teacherName?: string;
-  operation: 'extract_content' | 'generate_mcq';
+  operation: 'extract_content' | 'generate_mcq' | 'TEXT_EXTRACTION' | 'MCQ_GENERATION' | string;
   examId?: string;
   timestamp: string;
   status: 'success' | 'failed' | 'rejected';

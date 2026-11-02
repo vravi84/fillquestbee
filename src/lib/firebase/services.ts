@@ -68,24 +68,35 @@ function saveLocalAttempts(attempts: ExamAttempt[]) {
 
 // ---------------- FIRESTORE EXAM SERVICES ----------------
 
-export async function fetchTeacherExams(teacherId: string): Promise<Exam[]> {
+export async function fetchTeacherDashboardData(
+  teacherId: string
+): Promise<{ exams: Exam[]; attempts: ExamAttempt[] }> {
   if (isFirebaseConfigured && db) {
     try {
-      const q = query(
-        collection(db, 'exams'),
-        where('teacherId', '==', teacherId)
-      );
+      const dbRef = db;
+      const q = query(collection(dbRef, 'exams'), where('teacherId', '==', teacherId));
       const snapshot = await getDocs(q);
       const exams = snapshot.docs.map((docSnap) => docSnap.data() as Exam);
-      exams.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      exams.sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
 
-      // Also fetch attempt counts for each exam
-      for (const exam of exams) {
-        const attQuery = query(collection(db, 'attempts'), where('examId', '==', exam.id));
-        const attSnap = await getDocs(attQuery);
-        exam.attemptCount = attSnap.size;
-      }
-      return exams;
+      const attemptsByExam = await Promise.all(
+        exams.map(async (exam) => {
+          const attQuery = query(collection(dbRef, 'attempts'), where('examId', '==', exam.id));
+          const attSnap = await getDocs(attQuery);
+          const examAttempts = attSnap.docs.map((d) => d.data() as ExamAttempt);
+          exam.attemptCount = examAttempts.length;
+          return examAttempts;
+        })
+      );
+
+      const allAttempts = attemptsByExam.flat();
+      allAttempts.sort(
+        (a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime()
+      );
+
+      return { exams, attempts: allAttempts };
     } catch (err) {
       console.warn('Firestore fetch failed, using local storage:', err);
     }
@@ -93,12 +104,24 @@ export async function fetchTeacherExams(teacherId: string): Promise<Exam[]> {
 
   const local = getLocalExams();
   const attempts = getLocalAttempts();
-  const teacherExams = local.filter((e) => e.teacherId === teacherId || teacherId === 'teacher_demo_1');
+  const teacherExams = local.filter(
+    (e) => e.teacherId === teacherId || teacherId === 'teacher_demo_1'
+  );
 
-  return teacherExams.map((e) => ({
+  const enrichedExams = teacherExams.map((e) => ({
     ...e,
     attemptCount: attempts.filter((a) => a.examId === e.id || a.examId === e.shareCode).length,
   }));
+
+  const examIds = new Set(enrichedExams.flatMap((e) => [e.id, e.shareCode]));
+  const teacherAttempts = attempts.filter((a) => examIds.has(a.examId));
+
+  return { exams: enrichedExams, attempts: teacherAttempts };
+}
+
+export async function fetchTeacherExams(teacherId: string): Promise<Exam[]> {
+  const { exams } = await fetchTeacherDashboardData(teacherId);
+  return exams;
 }
 
 export async function fetchExamByIdOrCode(identifier: string): Promise<Exam | null> {
@@ -270,9 +293,9 @@ export async function deleteAttempt(attemptId: string): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
       await deleteDoc(doc(db, 'attempts', attemptId));
-      return;
     } catch (err) {
-      console.warn('Firestore delete attempt failed:', err);
+      console.error('Firestore delete attempt failed:', err);
+      throw err;
     }
   }
 
